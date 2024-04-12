@@ -22,7 +22,7 @@ confirm:
 ## run/web: run the cmd/web application
 .PHONY: run/web
 run/web:
-	go run ./cmd/web
+	go run ./cmd/web -db-dsn=${NJVANHAUTE_DB_DSN}
 
 # ==================================================================================== #
 # QUALITY CONTROL
