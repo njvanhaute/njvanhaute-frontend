@@ -67,4 +67,18 @@ build/web:
 ## production/connect: connect to the production server
 .PHONY: production/connect
 production/connect:
-	ssh jambuster@${NJVANHAUTE_PROD_IP}
+	ssh frontend@${NJVANHAUTE_PROD_IP}
+
+## production/deploy/web: deploy the frontend to production
+.PHONY: production/deploy/web
+production/deploy/web:
+	rsync -P ./bin/linux_amd64/web frontend@${NJVANHAUTE_PROD_IP}:~
+	rsync -P ./remote/production/frontend.service frontend@${NJVANHAUTE_PROD_IP}:~
+	rsync -P ./remote/production/Caddyfile frontend@${NJVANHAUTE_PROD_IP}:~
+	ssh -t frontend@${NJVANHAUTE_PROD_IP} '\
+	sudo mv ~/frontend.service /etc/systemd/system/ \
+	&& sudo systemctl enable frontend \
+	&& sudo systemctl restart frontend \
+	&& sudo mv ~/Caddyfile /etc/caddy/ \
+	&& sudo systemctl reload caddy \
+	'
