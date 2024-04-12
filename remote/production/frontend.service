@@ -22,7 +22,7 @@ User=frontend
 Group=frontend
 EnvironmentFile=/etc/environment
 WorkingDirectory=/home/frontend
-ExecStart=/home/frontend/web -addr=":4200" -db-dsn=${NJVANHAUTE_DB_DSN} -env=production
+ExecStart=/home/frontend/web -db-dsn=${NJVANHAUTE_DB_DSN} -backend-hostname=${JAMBUSTER_HOSTNAME} -env=production
 
 # Automatically restart the service after a 5-second wait if it exits with a non-zero
 # exit code. If it restarts more than 5 times in 600 seconds, then the rate limit we

@@ -17,10 +17,12 @@ import (
 )
 
 type application struct {
-	logger         *slog.Logger
-	sessionManager *scs.SessionManager
-	templateCache  map[string]*template.Template
-	formDecoder    *form.Decoder
+	logger          *slog.Logger
+	sessionManager  *scs.SessionManager
+	templateCache   map[string]*template.Template
+	formDecoder     *form.Decoder
+	httpClient      *http.Client
+	backendHostname string
 }
 
 type config struct {
@@ -32,11 +34,13 @@ type config struct {
 		maxIdleConns int
 		maxIdleTime  time.Duration
 	}
+	backendHostname   string
+	apiMaxRequestTime time.Duration
 }
 
 func main() {
 	var cfg config
-	flag.StringVar(&cfg.addr, "addr", ":4000", "HTTP network address")
+	flag.StringVar(&cfg.addr, "addr", ":4200", "HTTP network address")
 	flag.StringVar(&cfg.env, "env", "development", "Environment (development|staging|production)")
 
 	flag.StringVar(&cfg.db.dsn, "db-dsn", "", "PostgreSQL DSN")
@@ -44,6 +48,10 @@ func main() {
 	flag.IntVar(&cfg.db.maxOpenConns, "db-max-open-conns", 25, "PostgreSQL max open connections")
 	flag.IntVar(&cfg.db.maxIdleConns, "db-max-idle-conns", 25, "PostgreSQL max idle connections")
 	flag.DurationVar(&cfg.db.maxIdleTime, "db-max-idle-time", 15*time.Minute, "PostgreSQL max connection idle time")
+
+	flag.StringVar(&cfg.backendHostname, "backend-hostname", "http://localhost:4000", "Backend API hostname")
+
+	flag.DurationVar(&cfg.apiMaxRequestTime, "api-max-request-time", 10*time.Second, "Backend API max time to wait for repsonse")
 
 	flag.Parse()
 
@@ -67,11 +75,17 @@ func main() {
 
 	formDecoder := form.NewDecoder()
 
+	httpClient := &http.Client{
+		Timeout: cfg.apiMaxRequestTime,
+	}
+
 	app := &application{
-		logger:         logger,
-		sessionManager: sessionManager,
-		templateCache:  templateCache,
-		formDecoder:    formDecoder,
+		logger:          logger,
+		sessionManager:  sessionManager,
+		templateCache:   templateCache,
+		formDecoder:     formDecoder,
+		httpClient:      httpClient,
+		backendHostname: cfg.backendHostname,
 	}
 
 	logger.Info("starting server", "addr", cfg.addr)

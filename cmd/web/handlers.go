@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -47,6 +46,12 @@ func (app *application) userSignup(w http.ResponseWriter, r *http.Request) {
 	app.render(w, r, http.StatusOK, "signup.html", data)
 }
 
+type userSignupApiError struct {
+	Error struct {
+		Email string `json:"email"`
+	} `json:"error"`
+}
+
 func (app *application) userSignupPost(w http.ResponseWriter, r *http.Request) {
 	var form userSignupForm
 
@@ -79,21 +84,35 @@ func (app *application) userSignupPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	responseBody := bytes.NewBuffer(postBody)
-	resp, err := http.Post("https://jambuster.njvanhaute.com/v1/users", "application/json", responseBody)
+	postBuffer := bytes.NewBuffer(postBody)
+	rawResp, err := app.httpClient.Post(app.buildURL("/v1/users"),
+		"application/json", postBuffer)
+
 	if err != nil {
 		app.serverError(w, r, err)
 		return
 	}
 
-	defer resp.Body.Close()
+	defer rawResp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	var parsedResp userSignupApiError
+
+	err = app.readJSON(rawResp, &parsedResp)
 	if err != nil {
 		app.serverError(w, r, err)
 	}
-	sb := string(body)
-	app.logger.Info("Response got!", "body", sb)
+
+	if parsedResp.Error.Email != "" {
+		form.AddFieldError("email", "Email address is already in use")
+		data := app.newTemplateData(r)
+		data.Form = form
+		app.render(w, r, http.StatusUnprocessableEntity, "signup.html", data)
+		app.logger.Info("Response from json", "json", parsedResp)
+		return
+	}
+
+	app.sessionManager.Put(r.Context(), "flash", "Your signup was successful. Please check your email for more information.")
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (app *application) userLogin(w http.ResponseWriter, r *http.Request) {
