@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"flag"
+	"html/template"
 	"log/slog"
 	"net/http"
 	"os"
@@ -11,12 +12,15 @@ import (
 
 	"github.com/alexedwards/scs/postgresstore"
 	"github.com/alexedwards/scs/v2"
+	"github.com/go-playground/form/v4"
 	_ "github.com/lib/pq"
 )
 
 type application struct {
 	logger         *slog.Logger
 	sessionManager *scs.SessionManager
+	templateCache  map[string]*template.Template
+	formDecoder    *form.Decoder
 }
 
 type config struct {
@@ -52,11 +56,22 @@ func main() {
 	}
 	defer db.Close()
 
+	templateCache, err := newTemplateCache()
+	if err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+
 	sessionManager := scs.New()
 	sessionManager.Store = postgresstore.New(db)
+
+	formDecoder := form.NewDecoder()
+
 	app := &application{
 		logger:         logger,
 		sessionManager: sessionManager,
+		templateCache:  templateCache,
+		formDecoder:    formDecoder,
 	}
 
 	logger.Info("starting server", "addr", cfg.addr)
