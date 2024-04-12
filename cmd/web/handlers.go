@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -65,7 +68,32 @@ func (app *application) userSignupPost(w http.ResponseWriter, r *http.Request) {
 		app.render(w, r, http.StatusUnprocessableEntity, "signup.html", data)
 	}
 
-	fmt.Fprintln(w, "Create a new user...")
+	postBody, err := json.Marshal(map[string]string{
+		"name":     form.Name,
+		"email":    form.Email,
+		"password": form.Password,
+	})
+
+	if err != nil {
+		app.serverError(w, r, err)
+		return
+	}
+
+	responseBody := bytes.NewBuffer(postBody)
+	resp, err := http.Post("https://jambuster.njvanhaute.com/v1/users", "application/json", responseBody)
+	if err != nil {
+		app.serverError(w, r, err)
+		return
+	}
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		app.serverError(w, r, err)
+	}
+	sb := string(body)
+	app.logger.Info("Response got!", "body", sb)
 }
 
 func (app *application) userLogin(w http.ResponseWriter, r *http.Request) {
