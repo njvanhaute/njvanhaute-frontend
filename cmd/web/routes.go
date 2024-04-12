@@ -14,10 +14,10 @@ func (app *application) routes() http.Handler {
 
 	dynamic := alice.New(app.sessionManager.LoadAndSave)
 
-	mux.HandleFunc("GET /{$}", app.home)
-	mux.HandleFunc("GET /tune/view/{id}", app.tuneView)
-	mux.HandleFunc("GET /tune/create", app.tuneCreate)
-	mux.HandleFunc("POST /tune/create", app.tuneCreatePost)
+	mux.Handle("GET /{$}", dynamic.ThenFunc(app.home))
+	mux.Handle("GET /tune/view/{id}", dynamic.ThenFunc(app.tuneView))
+	mux.Handle("GET /tune/create", dynamic.ThenFunc(app.tuneCreate))
+	mux.Handle("POST /tune/create", dynamic.ThenFunc(app.tuneCreatePost))
 
 	mux.Handle("GET /user/signup", dynamic.ThenFunc(app.userSignup))
 	mux.Handle("POST /user/signup", dynamic.ThenFunc(app.userSignupPost))
