@@ -1,0 +1,16 @@
+{{define "title"}}Activate{{end}}
+
+{{define "main"}}
+<form action="/user/activate" method="POST" novalidate>
+    <div>
+        <label>Token</label>
+        {{with .Form.FieldErrors.token}}
+            <label class="error">{{.}}</label>
+        {{end}}
+        <input type="text" name="token">
+    </div>
+    <div>
+        <input type="submit" value="Activate">
+    </div>
+</form>
+{{end}}

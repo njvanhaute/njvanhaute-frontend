@@ -71,6 +71,7 @@ func (app *application) userSignupPost(w http.ResponseWriter, r *http.Request) {
 		data := app.newTemplateData(r)
 		data.Form = form
 		app.render(w, r, http.StatusUnprocessableEntity, "signup.html", data)
+		return
 	}
 
 	postBody, err := json.Marshal(map[string]string{
@@ -100,6 +101,7 @@ func (app *application) userSignupPost(w http.ResponseWriter, r *http.Request) {
 	err = app.readJSON(rawResp, &parsedResp)
 	if err != nil {
 		app.serverError(w, r, err)
+		return
 	}
 
 	if parsedResp.Error.Email != "" {
@@ -107,7 +109,6 @@ func (app *application) userSignupPost(w http.ResponseWriter, r *http.Request) {
 		data := app.newTemplateData(r)
 		data.Form = form
 		app.render(w, r, http.StatusUnprocessableEntity, "signup.html", data)
-		app.logger.Info("Response from json", "json", parsedResp)
 		return
 	}
 
@@ -125,4 +126,79 @@ func (app *application) userLoginPost(w http.ResponseWriter, r *http.Request) {
 
 func (app *application) userLogoutPost(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, "Logout the user...")
+}
+
+type userActivateForm struct {
+	Token               string `form:"token"`
+	validator.Validator `form:"-"`
+}
+
+func (app *application) userActivate(w http.ResponseWriter, r *http.Request) {
+	data := app.newTemplateData(r)
+	data.Form = userActivateForm{}
+	app.render(w, r, http.StatusOK, "activate.html", data)
+}
+
+type userActivateApiError struct {
+	Error struct {
+		Token string `json:"token"`
+	} `json:"error"`
+}
+
+func (app *application) userActivatePost(w http.ResponseWriter, r *http.Request) {
+	var form userActivateForm
+
+	err := app.decodePostForm(r, &form)
+	if err != nil {
+		app.clientError(w, http.StatusBadRequest)
+		return
+	}
+
+	form.CheckField(validator.NotBlank(form.Token), "token", "This field cannot be blank")
+	form.CheckField(len(form.Token) == 26, "token", "The token must be 26 characters long")
+
+	if !form.Valid() {
+		data := app.newTemplateData(r)
+		data.Form = form
+		app.render(w, r, http.StatusUnprocessableEntity, "activate.html", data)
+		return
+	}
+
+	putBody, err := json.Marshal(map[string]string{
+		"token": form.Token,
+	})
+
+	if err != nil {
+		app.serverError(w, r, err)
+		return
+	}
+
+	putBuffer := bytes.NewBuffer(putBody)
+	req, err := http.NewRequest(http.MethodPut, app.buildURL("/v1/users/activate"), putBuffer)
+	if err != nil {
+		app.serverError(w, r, err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	rawResp, err := app.httpClient.Do(req)
+	if err != nil {
+		app.serverError(w, r, err)
+		return
+	}
+
+	defer rawResp.Body.Close()
+
+	var parsedResp userActivateApiError
+
+	err = app.readJSON(rawResp, &parsedResp)
+	if nil == err && parsedResp.Error.Token != "" {
+		form.AddFieldError("token", "Invalid or expired activation token")
+		data := app.newTemplateData(r)
+		data.Form = form
+		app.render(w, r, http.StatusUnprocessableEntity, "activate.html", data)
+		return
+	}
+
+	app.sessionManager.Put(r.Context(), "flash", "Your account has been activated! You can log in now.")
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
