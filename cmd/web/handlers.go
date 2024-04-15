@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"frontend.njvanhaute.com/internal/validator"
 )
@@ -135,6 +135,13 @@ func (app *application) userLogin(w http.ResponseWriter, r *http.Request) {
 	app.render(w, r, http.StatusOK, "login.html", data)
 }
 
+type userAuthToken struct {
+	AuthToken struct {
+		Token  string    `json:"token"`
+		Expiry time.Time `json:"expiry"`
+	} `json:"authentication_token"`
+}
+
 func (app *application) userLoginPost(w http.ResponseWriter, r *http.Request) {
 	var form userLoginForm
 
@@ -166,7 +173,7 @@ func (app *application) userLoginPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	postBuffer := bytes.NewBuffer(postBody)
-	resp, err := app.httpClient.Post(app.buildURL("/v1/users/login"),
+	resp, err := app.httpClient.Post(app.buildURL("/v1/tokens/authentication"),
 		"application/json", postBuffer)
 
 	if err != nil {
@@ -176,13 +183,19 @@ func (app *application) userLoginPost(w http.ResponseWriter, r *http.Request) {
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusCreated {
 		form.AddNonFieldError("Invalid credentials. Please try again.")
 		data := app.newTemplateData(r)
 		data.Form = form
 		app.render(w, r, http.StatusUnauthorized, "login.html", data)
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		app.logger.Info("response body", "body", string(bodyBytes))
+		return
+	}
+
+	var tokenResp userAuthToken
+
+	err = app.readJSON(resp, &tokenResp)
+	if err != nil {
+		app.serverError(w, r, err)
 		return
 	}
 
@@ -192,12 +205,22 @@ func (app *application) userLoginPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app.sessionManager.Put(r.Context(), "authenticatedUserID", form.Email)
+	app.sessionManager.Put(r.Context(), "authenticatedUserToken", tokenResp.AuthToken.Token)
+	app.logger.Info("token", "token", tokenResp.AuthToken.Token)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (app *application) userLogoutPost(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "Logout the user...")
+	err := app.sessionManager.RenewToken(r.Context())
+	if err != nil {
+		app.serverError(w, r, err)
+		return
+	}
+
+	app.sessionManager.Remove(r.Context(), "authenticatedUserToken")
+	app.sessionManager.Put(r.Context(), "flash", "You've been logged out successfully!")
+
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 type userActivateForm struct {
