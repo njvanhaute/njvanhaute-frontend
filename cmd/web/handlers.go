@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
+	"frontend.njvanhaute.com/internal/models"
 	"frontend.njvanhaute.com/internal/validator"
 )
 
@@ -27,7 +29,18 @@ func (app *application) tuneView(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	fmt.Fprintf(w, "Display a specific tune with ID %d...", id)
+
+	tune, err := app.GetTune(id, r)
+	if err != nil {
+		if errors.Is(err, models.ErrNoRecord) {
+			http.NotFound(w, r)
+		} else {
+			app.serverError(w, r, err)
+		}
+		return
+	}
+
+	fmt.Fprintf(w, "%+v", tune)
 }
 
 func (app *application) tuneCreate(w http.ResponseWriter, r *http.Request) {
