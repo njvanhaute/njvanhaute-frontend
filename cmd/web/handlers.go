@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -135,7 +136,64 @@ func (app *application) userLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *application) userLoginPost(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "Authenticate and login the user...")
+	var form userLoginForm
+
+	err := app.decodePostForm(r, &form)
+	if err != nil {
+		app.clientError(w, http.StatusBadRequest)
+		return
+	}
+
+	form.CheckField(validator.NotBlank(form.Email), "email", "This field cannot be blank")
+	form.CheckField(validator.Matches(form.Email, validator.EmailRX), "email", "This field must be a valid email address")
+	form.CheckField(validator.NotBlank(form.Password), "password", "This field cannot be blank")
+
+	if !form.Valid() {
+		data := app.newTemplateData(r)
+		data.Form = form
+		app.render(w, r, http.StatusUnprocessableEntity, "login.html", data)
+		return
+	}
+
+	postBody, err := json.Marshal(map[string]string{
+		"email":    form.Email,
+		"password": form.Password,
+	})
+
+	if err != nil {
+		app.serverError(w, r, err)
+		return
+	}
+
+	postBuffer := bytes.NewBuffer(postBody)
+	resp, err := app.httpClient.Post(app.buildURL("/v1/users/login"),
+		"application/json", postBuffer)
+
+	if err != nil {
+		app.serverError(w, r, err)
+		return
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		form.AddNonFieldError("Invalid credentials. Please try again.")
+		data := app.newTemplateData(r)
+		data.Form = form
+		app.render(w, r, http.StatusUnauthorized, "login.html", data)
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		app.logger.Info("response body", "body", string(bodyBytes))
+		return
+	}
+
+	err = app.sessionManager.RenewToken(r.Context())
+	if err != nil {
+		app.serverError(w, r, err)
+		return
+	}
+
+	app.sessionManager.Put(r.Context(), "authenticatedUserID", form.Email)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (app *application) userLogoutPost(w http.ResponseWriter, r *http.Request) {
