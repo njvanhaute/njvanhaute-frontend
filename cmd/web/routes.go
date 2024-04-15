@@ -16,7 +16,6 @@ func (app *application) routes() http.Handler {
 
 	mux.Handle("GET /{$}", dynamic.ThenFunc(app.home))
 	mux.Handle("GET /transcriptions", dynamic.ThenFunc(app.transcriptions))
-	mux.Handle("GET /tune/view/{id}", dynamic.ThenFunc(app.tuneView))
 	mux.Handle("GET /user/signup", dynamic.ThenFunc(app.userSignup))
 	mux.Handle("POST /user/signup", dynamic.ThenFunc(app.userSignupPost))
 	mux.Handle("GET /user/activate", dynamic.ThenFunc(app.userActivate))
@@ -29,6 +28,7 @@ func (app *application) routes() http.Handler {
 	mux.Handle("GET /tune/create", protected.ThenFunc(app.tuneCreate))
 	mux.Handle("POST /tune/create", protected.ThenFunc(app.tuneCreatePost))
 	mux.Handle("POST /user/logout", protected.ThenFunc(app.userLogoutPost))
+	mux.Handle("GET /tune/view/{id}", protected.ThenFunc(app.tuneView))
 
 	standard := alice.New(app.recoverPanic, app.logRequest, commonHeaders)
 	return standard.Then(mux)
