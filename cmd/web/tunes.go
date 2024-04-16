@@ -39,9 +39,6 @@ func (app *application) GetTune(id int, r *http.Request) (Tune, error) {
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
 	resp, err := app.httpClient.Do(req)
 
-	app.logger.Info("Req", "req", req)
-	app.logger.Info("Resp", "resp", resp)
-
 	if err != nil {
 		return Tune{}, err
 	}

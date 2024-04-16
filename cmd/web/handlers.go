@@ -247,12 +247,6 @@ func (app *application) userActivate(w http.ResponseWriter, r *http.Request) {
 	app.render(w, r, http.StatusOK, "activate.html", data)
 }
 
-type userActivateApiError struct {
-	Error struct {
-		Token string `json:"token"`
-	} `json:"error"`
-}
-
 func (app *application) userActivatePost(w http.ResponseWriter, r *http.Request) {
 	var form userActivateForm
 
@@ -288,24 +282,24 @@ func (app *application) userActivatePost(w http.ResponseWriter, r *http.Request)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	rawResp, err := app.httpClient.Do(req)
+	resp, err := app.httpClient.Do(req)
 	if err != nil {
 		app.serverError(w, r, err)
 		return
 	}
 
-	defer rawResp.Body.Close()
-
-	var parsedResp userActivateApiError
-
-	err = app.readJSON(rawResp, &parsedResp)
-	if nil == err && parsedResp.Error.Token != "" {
+	if resp.StatusCode == http.StatusUnprocessableEntity {
 		form.AddFieldError("token", "Invalid or expired activation token")
 		data := app.newTemplateData(r)
 		data.Form = form
 		app.render(w, r, http.StatusUnprocessableEntity, "activate.html", data)
 		return
+	} else if resp.StatusCode != http.StatusOK {
+		app.serverError(w, r, err)
+		return
 	}
+
+	defer resp.Body.Close()
 
 	app.sessionManager.Put(r.Context(), "flash", "Your account has been activated! You can log in now.")
 	http.Redirect(w, r, "/", http.StatusSeeOther)
